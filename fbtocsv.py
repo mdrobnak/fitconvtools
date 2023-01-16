@@ -3,7 +3,7 @@ import argparse
 import csv
 import datetime
 import json
-#import operator
+import os
 import pprint
 import pytz
 import sys
@@ -15,7 +15,6 @@ parser = argparse.ArgumentParser(
                     description = 'Converts Fitbit data for use with CSVTool')
 
 parser.add_argument('-d', '--date')      # option that takes a value
-parser.add_argument('-r', '--rhr', nargs=6, type=int)
 parser.add_argument('-o', '--rhr-only', action='store_true', default=False)
 parser.add_argument('-f', '--file-number', type=int, default=1)
 
@@ -80,22 +79,32 @@ def process_hr():
           out_dict[ts] = {"heartRate": emp['value']['bpm']}
 
 
+seven_day_avg = 0
+hr_samples = 0
 if args.rhr_only:
     rhr = []
     with open("./rhr-stats.json") as rhr_file:
         rhr = json.load(rhr_file)
     process_hr()
-    pprint.pprint(hrvals)
-    daily_rhr = min(hrvals)
-    rhr.append({ "dateTime": "2015-06-%s" % df_date, "rhr": min(hrvals) })
-    pprint.pprint(rhr)
+    daily_rhr = int(min(hrvals))
+    rhr.append({ "dateTime": "2015-06-%s" % df_date, "rhr": daily_rhr })
     with open("./rhr-stats.json", "w") as jsonFile:
         json.dump(rhr, jsonFile)
     sys.exit(0)
 else:
-    with open("./rhr-stats.json") as rhr_file:
+    with open("%s/rhr-stats.json" % os.environ.get('HOME')) as rhr_file:
         rhr = json.load(rhr_file)
-
+    today = datetime.datetime.strptime("2015-06-%s" % df_date, "%Y-%m-%d")
+    seven_days = today - datetime.timedelta(days=7)
+    today_ts = today.timestamp()
+    seven_day_ts = seven_days.timestamp()
+    rhr_json_date_format = "%Y-%m-%d"
+    for samples in rhr:
+         dt_object = datetime.datetime.strptime(samples['dateTime'], rhr_json_date_format)
+         ts = int(dt_object.timestamp())
+         if ts > seven_day_ts and ts < today_ts:
+           seven_day_avg += int(samples['rhr'])
+           hr_samples += 1
 
 file_id_number = args.file_number
 
@@ -172,12 +181,8 @@ for key in sorted(out_dict.keys()):
 # 7-Day Average Resting Heart Rate: Some watches will display a 7-day average resting value which is the daily average resting heart rate over the last seven days. It is a rolling value.
 day_rhr = int(min(hrvals))
 print("Today's RHR: ", day_rhr)
-
-sevenday = 0
-for i in args.rhr:
-    sevenday += i
-sevenday += day_rhr
-sevenday = int(sevenday/7)
+seven_day_avg += day_rhr
+seven_day_avg = int(seven_day_avg/7)
 
 
 ##### BEGIN OUTPUT SECTION
@@ -213,7 +218,10 @@ wellness_writer.writerow(rhr_def)
 # Sort and write out.
 #output_data.sort(key= operator.itemgetter(4,1))
 wellness_writer.writerows(output_data)
-wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"seven_day_rhr", sevenday, None, "daily_rhr", day_rhr, None ] )
+if hr_samples == 6:
+  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"seven_day_rhr", seven_day_avg, None, "daily_rhr", day_rhr, None ] )
+else:
+  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"daily_rhr", day_rhr, None ] )
 wellness_data_file.close()
 
 # Sleep
