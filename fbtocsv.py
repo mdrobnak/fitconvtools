@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('-d', '--date')      # option that takes a value
 parser.add_argument('-r', '--rhr', nargs=6, type=int)
+parser.add_argument('-o', '--rhr-only', action='store_true', default=False)
 parser.add_argument('-f', '--file-number', type=int, default=1)
 
 args = parser.parse_args()
@@ -41,7 +42,13 @@ with open('./Physical Activity/altitude-2015-06-09.json') as json_file:
   floors = json.load(json_file)
 
 
+# Initalize empty objects.
+out_dict = {}
+hrvals = []
 
+# Date format
+
+fb_json_date_format = "%m/%d/%y %H:%M:%S"
 
 # FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
 FIT_EPOCH_OFFSET = 631065600+31536000
@@ -51,11 +58,47 @@ start_ts = int(time.mktime(date_time.timetuple()))
 garmin_start_ts = start_ts-FIT_EPOCH_OFFSET
 garmin_start_ts_not_utc = garmin_start_ts + int(pytz.timezone("US/Eastern").utcoffset(date_time).total_seconds())
 
+def process_hr():
+  hrcount = 0
+  hrsum = 0
+
+  for emp in heart_rate:
+    if emp['value']['confidence'] != 0:
+      dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
+      ts = int(dt_object.timestamp())
+      if ts >= start_ts and ts < start_ts+86400:
+        # Gather data for Resting Heart Rate calculation
+        hrcount += 1
+        hrsum += emp['value']['bpm']
+        if (start_ts - ts) % 1800 == 0 and hrcount >= 150:
+          hrvals.append(hrsum / hrcount)
+          hrcount = 0
+          hrsum = 0
+        if ts in out_dict:
+          out_dict[ts].update( {"heartRate": emp['value']['bpm']})
+        else:
+          out_dict[ts] = {"heartRate": emp['value']['bpm']}
+
+
+if args.rhr_only:
+    rhr = []
+    with open("./rhr-stats.json") as rhr_file:
+        rhr = json.load(rhr_file)
+    process_hr()
+    pprint.pprint(hrvals)
+    daily_rhr = min(hrvals)
+    rhr.append({ "dateTime": "2015-06-%s" % df_date, "rhr": min(hrvals) })
+    pprint.pprint(rhr)
+    with open("./rhr-stats.json", "w") as jsonFile:
+        json.dump(rhr, jsonFile)
+    sys.exit(0)
+else:
+    with open("./rhr-stats.json") as rhr_file:
+        rhr = json.load(rhr_file)
+
+
 file_id_number = args.file_number
 
-# Date format
-
-format = "%m/%d/%y %H:%M:%S"
 
 # Counter variable used for writing
 # headers to the CSV file
@@ -88,15 +131,13 @@ m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts_not_u
 
 
 output_data = []
-out_dict = {}
-hrvals = []
 stepval = 0
 distval = 0.0
 local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
 
 # There should be a steps timestamp every minute. If there's no reading, then the watch was not on the wrist.
 for emp in steps:
-  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
+  dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
     stepval += int(emp['value'])
@@ -105,7 +146,7 @@ for emp in steps:
     out_dict[ts] = { "distance": distval, "steps": stepval }
 
 for emp in floors:
-  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
+  dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
     ascentval = int(emp['value'])/10.0 * 3.048 # 10 ft is 3.048 meters.
@@ -115,26 +156,7 @@ for emp in floors:
       out_dict[ts] = {"floors": ascentval}
 
 
-hrcount = 0
-hrsum = 0
-
-for emp in heart_rate:
-  if emp['value']['confidence'] != 0:
-    dt_object = datetime.datetime.strptime(emp['dateTime'], format)
-    ts = int(dt_object.timestamp())
-    if ts >= start_ts and ts < start_ts+86400:
-      # Gather data for Resting Heart Rate calculation
-      hrcount += 1
-      hrsum += emp['value']['bpm']
-      if (start_ts - ts) % 1800 == 0 and hrcount >= 150:
-        hrvals.append(hrsum / hrcount)
-        hrcount = 0
-        hrsum = 0
-      if ts in out_dict:
-        out_dict[ts].update( {"heartRate": emp['value']['bpm']})
-      else:
-        out_dict[ts] = {"heartRate": emp['value']['bpm']}
-
+process_hr()
 
 # Final output stuff
 for key in sorted(out_dict.keys()):
