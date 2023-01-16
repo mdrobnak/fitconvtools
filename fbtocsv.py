@@ -1,12 +1,29 @@
-import datetime
-import time
-import json
+#!/bin/env python3
+import argparse
 import csv
-import operator
+import datetime
+import json
+#import operator
 import pprint
 import pytz
+import sys
+import time
 
-df_date="23"
+
+parser = argparse.ArgumentParser(
+                    prog = 'fit-import',
+                    description = 'Converts Fitbit data for use with CSVTool')
+
+parser.add_argument('-d', '--date')      # option that takes a value
+parser.add_argument('-r', '--rhr', nargs=6, type=int)
+parser.add_argument('-f', '--file-number', type=int, default=1)
+
+args = parser.parse_args()
+if args.date is not None:
+  df_date=args.date
+else:
+  print("Must specify date.")
+  sys.exit(1)
 
 with open("./Physical Activity/heart_rate-2015-06-%s.json" % df_date) as json_file:
   heart_rate = json.load(json_file)
@@ -24,18 +41,6 @@ with open('./Physical Activity/altitude-2015-06-09.json') as json_file:
   floors = json.load(json_file)
 
 
-wellness_filename = "wellness-2015-06-%s.csv" % df_date
-wellness_data_file = open(wellness_filename, 'w')
-
-# create the csv writer object
-#wellness_writer = csv.writer(wellness_data_file, quoting=csv.QUOTE_ALL)
-wellness_writer = csv.writer(wellness_data_file)
-
-sleep_filename = "sleep-2015-06-%s.csv" % df_date
-sleep_data_file = open(sleep_filename, 'w')
-
-# create the csv writer object
-sleep_writer = csv.writer(sleep_data_file)
 
 
 # FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
@@ -46,7 +51,7 @@ start_ts = int(time.mktime(date_time.timetuple()))
 garmin_start_ts = start_ts-FIT_EPOCH_OFFSET
 garmin_start_ts_not_utc = garmin_start_ts + int(pytz.timezone("US/Eastern").utcoffset(date_time).total_seconds())
 
-file_id_number = 1
+file_id_number = args.file_number
 
 # Date format
 
@@ -68,6 +73,8 @@ m_inf_def   = [ "Definition","4","monitoring_info","timestamp","1",None,"cycles_
 m_def       = [ "Definition","6","monitoring","timestamp","1",None,"distance","1",None,"cycles","1",None,"activity_type","1",None ]
 hr_def      = [ "Definition","7","monitoring","timestamp","1",None,"heart_rate","1",None ]
 floor_def   = [ "Definition","8","monitoring","timestamp","1",None,"ascent","1",None ]
+rhr_def     = [ "Definition","9","resting_heart_rate","timestamp","1",None,"seven_day_rhr","1",None,"daily_rhr","1",None ]
+
 
 # Welness first
 file_id_type = 32
@@ -77,6 +84,92 @@ sw_ver_data   = [ "Data","2","software","version","6.0",None ]
 s_inf_data    = [ "Data","3","soft_info","field0","0",None,"field1","0",None,"field2","200",None ]
 m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 #m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts,"s","local_timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
+
+
+
+output_data = []
+out_dict = {}
+hrvals = []
+stepval = 0
+distval = 0.0
+local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
+
+# There should be a steps timestamp every minute. If there's no reading, then the watch was not on the wrist.
+for emp in steps:
+  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
+  ts = int(dt_object.timestamp())
+  if ts >= start_ts and ts < start_ts+86400:
+    stepval += int(emp['value'])
+    dist = next((x for x in distance if x['dateTime'] == emp['dateTime']), None)
+    distval += (int(dist['value'])/100.0) # centimeters to meters conversion.
+    out_dict[ts] = { "distance": distval, "steps": stepval }
+
+for emp in floors:
+  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
+  ts = int(dt_object.timestamp())
+  if ts >= start_ts and ts < start_ts+86400:
+    ascentval = int(emp['value'])/10.0 * 3.048 # 10 ft is 3.048 meters.
+    if ts in out_dict:
+      out_dict[ts].update({"floors": ascentval})
+    else:
+      out_dict[ts] = {"floors": ascentval}
+
+
+hrcount = 0
+hrsum = 0
+
+for emp in heart_rate:
+  if emp['value']['confidence'] != 0:
+    dt_object = datetime.datetime.strptime(emp['dateTime'], format)
+    ts = int(dt_object.timestamp())
+    if ts >= start_ts and ts < start_ts+86400:
+      # Gather data for Resting Heart Rate calculation
+      hrcount += 1
+      hrsum += emp['value']['bpm']
+      if (start_ts - ts) % 1800 == 0 and hrcount >= 150:
+        hrvals.append(hrsum / hrcount)
+        hrcount = 0
+        hrsum = 0
+      if ts in out_dict:
+        out_dict[ts].update( {"heartRate": emp['value']['bpm']})
+      else:
+        out_dict[ts] = {"heartRate": emp['value']['bpm']}
+
+
+# Final output stuff
+for key in sorted(out_dict.keys()):
+    if "steps" in out_dict[key].keys():
+      output_data.append(["Data",6,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "distance", "{0:.3f}".format(out_dict[key]['distance']), "m", "steps",int(out_dict[key]['steps']),"cycles","activity_type","6",None])
+    if "heartRate" in out_dict[key].keys():
+      output_data.append(["Data",7,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "heart_rate",out_dict[key]['heartRate'],"bpm"])
+    if "floors" in out_dict[key].keys():
+      output_data.append(["Data",8,"monitoring","timestamp",key-FIT_EPOCH_OFFSET, "s", "ascent", "{0:.3f}".format(out_dict[key]['floors']),"m"])
+
+# RHR Calc:
+# Resting Heart Rate: This value is for the current day. Daily RHR is calculated using the lowest 30 minute average in a 24 hour period.
+# 7-Day Average Resting Heart Rate: Some watches will display a 7-day average resting value which is the daily average resting heart rate over the last seven days. It is a rolling value.
+day_rhr = int(min(hrvals))
+print("Today's RHR: ", day_rhr)
+
+sevenday = 0
+for i in args.rhr:
+    sevenday += i
+sevenday += day_rhr
+sevenday = int(sevenday/7)
+
+
+##### BEGIN OUTPUT SECTION
+# create the csv writer object
+wellness_filename = "new-wellness-2015-06-%s.csv" % df_date
+wellness_data_file = open(wellness_filename, 'w')
+wellness_writer = csv.writer(wellness_data_file)
+
+sleep_filename = "sleep-2015-06-%s.csv" % df_date
+sleep_data_file = open(sleep_filename, 'w')
+
+# create the csv writer object
+sleep_writer = csv.writer(sleep_data_file)
+
 
 wellness_writer.writerow(header)
 wellness_writer.writerow(file_id_def)
@@ -92,44 +185,13 @@ wellness_writer.writerow(m_inf_data)
 wellness_writer.writerow(m_def)
 wellness_writer.writerow(hr_def)
 wellness_writer.writerow(floor_def)
+wellness_writer.writerow(rhr_def)
 
-
-
-output_data = []
-stepval = 0
-distval = 0.0
-local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
-
-# Loop over data
-for emp in heart_rate:
-  print(emp)
-  if emp['value']['confidence'] != 0:
-    dt_object = datetime.datetime.strptime(emp['dateTime'], format)
-    ts = int(dt_object.timestamp())
-    if ts >= start_ts and ts < start_ts+86400:
-      output_data.append(["Data",7,"monitoring","timestamp",ts-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "heart_rate",emp['value']['bpm'],"bpm"])
-
-for emp in floors:
-  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
-  ts = int(dt_object.timestamp())
-  if ts >= start_ts and ts < start_ts+86400:
-    ascentval = int(emp['value'])/10.0 * 3.03
-    print(emp['dateTime'],int(emp['value'])/10.0, ascentval)
-    output_data.append(["Data",8,"monitoring","timestamp",ts-FIT_EPOCH_OFFSET, "s", "ascent", "{0:.3f}".format(ascentval),"m"])
-
-for emp in steps:
-  dt_object = datetime.datetime.strptime(emp['dateTime'], format)
-  ts = int(dt_object.timestamp())
-  if ts >= start_ts and ts < start_ts+86400:
-    stepval += int(emp['value'])
-    dist = next((x for x in distance if x['dateTime'] == emp['dateTime']), None)
-    distval += (int(dist['value'])/100.0) # centimeters to meters conversion.
-    print(emp)
-    output_data.append(["Data",6,"monitoring","timestamp",ts-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "distance", "{0:.3f}".format(distval), "m", "steps",int(stepval),"cycles","activity_type","6",None])
 
 # Sort and write out.
-output_data.sort(key= operator.itemgetter(4,1))
+#output_data.sort(key= operator.itemgetter(4,1))
 wellness_writer.writerows(output_data)
+wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"seven_day_rhr", sevenday, None, "daily_rhr", day_rhr, None ] )
 wellness_data_file.close()
 
 # Sleep
