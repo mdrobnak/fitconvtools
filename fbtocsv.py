@@ -9,30 +9,30 @@ import pytz
 import sys
 import time
 
-
+# Process arguments
 parser = argparse.ArgumentParser(
-                    prog = 'fit-import',
+                    prog = 'fbtocsv',
                     description = 'Converts Fitbit data for use with CSVTool')
-
 parser.add_argument('-d', '--date')      # option that takes a value
-parser.add_argument('-o', '--rhr-only', action='store_true', default=False)
 parser.add_argument('-f', '--file-number', type=int, default=1)
+parser.add_argument('-r', '--rhr-only', action='store_true', default=False)
 
 args = parser.parse_args()
 if args.date is not None:
   df_date=args.date
 else:
   print("Must specify date.")
+  parser.print_usage()
   sys.exit(1)
 
+file_id_number = args.file_number
+
+# Open needed files.
 with open("./Physical Activity/heart_rate-2015-06-%s.json" % df_date) as json_file:
   heart_rate = json.load(json_file)
 
 with open('./Physical Activity/steps-2015-06-09.json') as json_file:
   steps = json.load(json_file)
-
-#with open('./Physical Activity/steps-2015-04-10.json') as json_file:
-#  steps = json.load(json_file) + steps
 
 with open('./Physical Activity/distance-2015-06-09.json') as json_file:
   distance = json.load(json_file)
@@ -41,13 +41,15 @@ with open('./Physical Activity/altitude-2015-06-09.json') as json_file:
   floors = json.load(json_file)
 
 
-# Initalize empty objects.
-out_dict = {}
+# Initalize empty objects and values
+distval = 0.0
+hrsamples = 0
 hrvals = []
+output_data = []
+out_dict = {}
+seven_day_avg = 0
+stepval = 0
 
-# Date format
-
-fb_json_date_format = "%m/%d/%y %H:%M:%S"
 
 # FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
 FIT_EPOCH_OFFSET = 631065600+31536000
@@ -56,6 +58,8 @@ date_time = datetime.datetime(2015,6,int(df_date),4,0,0)
 start_ts = int(time.mktime(date_time.timetuple()))
 garmin_start_ts = start_ts-FIT_EPOCH_OFFSET
 garmin_start_ts_not_utc = garmin_start_ts + int(pytz.timezone("US/Eastern").utcoffset(date_time).total_seconds())
+local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
+fb_json_date_format = "%m/%d/%y %H:%M:%S"
 
 def process_hr():
   hrcount = 0
@@ -79,16 +83,14 @@ def process_hr():
           out_dict[ts] = {"heartRate": emp['value']['bpm']}
 
 
-seven_day_avg = 0
-hr_samples = 0
 if args.rhr_only:
     rhr = []
-    with open("./rhr-stats.json") as rhr_file:
+    with open("%s/rhr-stats.json" % os.environ.get('HOME')) as rhr_file:
         rhr = json.load(rhr_file)
     process_hr()
     daily_rhr = int(min(hrvals))
     rhr.append({ "dateTime": "2015-06-%s" % df_date, "rhr": daily_rhr })
-    with open("./rhr-stats.json", "w") as jsonFile:
+    with open("%s/rhr-stats.json" % os.environ.get('HOME'), "w") as jsonFile:
         json.dump(rhr, jsonFile)
     sys.exit(0)
 else:
@@ -104,14 +106,10 @@ else:
          ts = int(dt_object.timestamp())
          if ts > seven_day_ts and ts < today_ts:
            seven_day_avg += int(samples['rhr'])
-           hr_samples += 1
-
-file_id_number = args.file_number
+           hrsamples += 1
 
 
-# Counter variable used for writing
-# headers to the CSV file
-count = 0
+
 # Writing headers of CSV file
 header = [ "Type","Local Number","Message","Field 1","Value 1","Units 1","Field 2","Value 2","Units 2","Field 3","Value 3","Units 3", "Field 4","Value 4","Units 4","Field 5","Value 5","Units 5","Field 6","Value 6","Units 6" ]
 
@@ -137,12 +135,6 @@ s_inf_data    = [ "Data","3","soft_info","field0","0",None,"field1","0",None,"fi
 m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 #m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts,"s","local_timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 
-
-
-output_data = []
-stepval = 0
-distval = 0.0
-local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
 
 # There should be a steps timestamp every minute. If there's no reading, then the watch was not on the wrist.
 for emp in steps:
@@ -218,7 +210,7 @@ wellness_writer.writerow(rhr_def)
 # Sort and write out.
 #output_data.sort(key= operator.itemgetter(4,1))
 wellness_writer.writerows(output_data)
-if hr_samples == 6:
+if hrsamples == 6:
   wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"seven_day_rhr", seven_day_avg, None, "daily_rhr", day_rhr, None ] )
 else:
   wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"daily_rhr", day_rhr, None ] )
@@ -260,5 +252,4 @@ sleep_writer.writerow(dev_info_data)
 sleep_writer.writerow(sleep_event_def)
 sleep_writer.writerow(sleep_event_sta)
 sleep_writer.writerow(sleep_event_stp)
-#sleep_writer.writerows(output_data)
 sleep_data_file.close()
