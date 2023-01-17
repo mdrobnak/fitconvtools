@@ -150,7 +150,7 @@ for emp in floors:
   dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
-    ascentval = int(emp['value'])/10.0 * 3.048 # 10 ft is 3.048 meters.
+    ascentval = int(emp['value'])/10.0 * 3.04 # 10 ft is 3.048 meters. Still a little too high. Try 3.04.
     if ts in out_dict:
       out_dict[ts].update({"floors": ascentval})
     else:
