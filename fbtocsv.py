@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('-d', '--date')      # option that takes a value
 parser.add_argument('-f', '--file-number', type=int, default=1)
 parser.add_argument('-r', '--rhr-only', action='store_true', default=False)
+parser.add_argument('-s', '--src-dir', default=".")
 
 args = parser.parse_args()
 if args.date is not None:
@@ -28,16 +29,16 @@ else:
 file_id_number = args.file_number
 
 # Open needed files.
-with open("./Physical Activity/heart_rate-2015-06-%s.json" % df_date) as json_file:
+with open("%s/Physical Activity/heart_rate-2015-06-%s.json" % (args.src_dir, df_date)) as json_file:
   heart_rate = json.load(json_file)
 
-with open('./Physical Activity/steps-2015-06-09.json') as json_file:
+with open('%s/Physical Activity/steps-2015-06-09.json' % args.src_dir) as json_file:
   steps = json.load(json_file)
 
-with open('./Physical Activity/distance-2015-06-09.json') as json_file:
+with open('%s/Physical Activity/distance-2015-06-09.json' % args.src_dir) as json_file:
   distance = json.load(json_file)
 
-with open('./Physical Activity/altitude-2015-06-09.json') as json_file:
+with open('%s/Physical Activity/altitude-2015-06-09.json' % args.src_dir) as json_file:
   floors = json.load(json_file)
 
 
