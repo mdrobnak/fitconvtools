@@ -160,12 +160,12 @@ for emp in floors:
 process_hr()
 
 # Final output stuff
-for key in sorted(out_dict.keys()):
-    if "steps" in out_dict[key].keys():
+for key in sorted(out_dict):
+    if "steps" in out_dict[key]:
       output_data.append(["Data",6,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "distance", "{0:.3f}".format(out_dict[key]['distance']), "m", "steps",int(out_dict[key]['steps']),"cycles","activity_type","6",None])
-    if "heartRate" in out_dict[key].keys():
+    if "heartRate" in out_dict[key]:
       output_data.append(["Data",7,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "heart_rate",out_dict[key]['heartRate'],"bpm"])
-    if "floors" in out_dict[key].keys():
+    if "floors" in out_dict[key]:
       output_data.append(["Data",8,"monitoring","timestamp",key-FIT_EPOCH_OFFSET, "s", "ascent", "{0:.3f}".format(out_dict[key]['floors']),"m"])
 
 # RHR Calc:
