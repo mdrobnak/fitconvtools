@@ -228,6 +228,11 @@ sleep_writer.writerow(file_id_data)
 file_creator_def  = [ "Definition","1","file_creator","software_version",1,None ]
 file_creator_data = [ "Data","1","file_creator","software_version","1116",None ]
 
+sensor_def  = [ "Definition","3","sleep_sensor","timestamp","1",None,"local_timestamp","1",None,"sensor_sw_ver","32",None,"vlue_1","1",None,"value_2","1",None,"sleep_sensor_enum","1",None ]
+sensor_data = [ "Data","3","sleep_sensor","timestamp",garmin_start_ts,None,"local_timestamp",garmin_start_ts_not_utc,None,"sensor_sw_ver","6.14.8.3-ETE-garmin-7c33af24",None,"vlue_1","60",None,"value_2","2",None,"sleep_sensor_enum","1",None ]
+sleep_writer.writerow(sensor_def)
+sleep_writer.writerow(sensor_data)
+
 sleep_event_def = [ "Definition","4","event","timestamp","1",None,"data","1",None,"event","1",None,"event_type","1",None ]
 
 # Event data is in local time, timestamps are in UTC....
