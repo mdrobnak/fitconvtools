@@ -1,0 +1,30 @@
+diff --git a/fitbit/api.py b/fitbit/api.py
+index 1b458b1..cf0c174 100644
+--- a/fitbit/api.py
++++ b/fitbit/api.py
+@@ -245,6 +245,25 @@ class Fitbit(object):
+             setattr(self, '%s_foods' % qualifier, curry(self._food_stats,
+                                                         qualifier=qualifier))
+ 
++    def do_download(self, *args, **kwargs):
++        # This should handle data level errors, improper requests, and bad
++        # serialization
++        headers = kwargs.get('headers', {})
++        headers.update({'Accept-Language': self.system})
++        kwargs['headers'] = headers
++
++        method = kwargs.get('method', 'POST' if 'data' in kwargs else 'GET')
++        response = self.client.make_request(*args, **kwargs)
++
++        if response.status_code == 202:
++            return True
++        if method == 'DELETE':
++            if response.status_code == 204:
++                return True
++            else:
++                raise exceptions.DeleteError(response)
++        return response.content
++
+     def make_request(self, *args, **kwargs):
+         # This should handle data level errors, improper requests, and bad
+         # serialization
