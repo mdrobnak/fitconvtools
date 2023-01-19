@@ -17,6 +17,7 @@ parser.add_argument('-d', '--date')      # option that takes a value
 parser.add_argument('-f', '--file-number', type=int, default=1)
 parser.add_argument('-r', '--rhr-only', action='store_true', default=False)
 parser.add_argument('-s', '--src-dir', default=".")
+parser.add_argument('-t', '--offset-ts-data', action='store_true', default=False)
 
 args = parser.parse_args()
 if args.date is not None:
@@ -30,6 +31,8 @@ file_id_number = args.file_number
 
 # Temporary
 full_date = "2015-06-%s" % df_date
+
+offset_ts_data = args.offset_ts_data
 
 # Open needed files.
 filename_date = ""
@@ -108,11 +111,11 @@ def process_hr():
           hrvals.append(hrsum / hrcount)
           hrcount = 0
           hrsum = 0
-        if ts in out_dict:
-          out_dict[ts].update( {"heartRate": emp['value']['bpm']})
+        data_ts = ts - local_to_utc_diff if offset_ts_data else ts
+        if data_ts in out_dict:
+          out_dict[data_ts].update( {"heartRate": emp['value']['bpm']})
         else:
-          out_dict[ts] = {"heartRate": emp['value']['bpm']}
-
+          out_dict[data_ts] = {"heartRate": emp['value']['bpm']}
 
 if args.rhr_only:
     rhr = []
@@ -150,7 +153,7 @@ dev_inf_def = [ "Definition","1","device_info","timestamp","1",None,"serial_numb
 sw_ver_def  = [ "Definition","2","software","version","1",None ]
 s_inf_def   = [ "Definition","3","soft_info","field0","1",None,"field1","1",None,"field2","1",None ]
 m_inf_def   = [ "Definition","4","monitoring_info","timestamp","1",None,"cycles_to_distance","2",None,"cycles_to_calories","2",None,"step_goal","2",None,"resting_metabolic_rate","1",None,"activity_type","2",None,"unk_enum","1",None ]
-#m_inf_def   = [ "Definition","4","monitoring_info","timestamp","1",None,"local_timestamp","1",None,"cycles_to_distance","2",None,"cycles_to_calories","2",None,"step_goal","2",None,"resting_metabolic_rate","1",None,"activity_type","2",None,"unk_enum","1",None ]
+m_inf_tz_def= [ "Definition","4","monitoring_info","timestamp","1",None,"local_timestamp","1",None,"cycles_to_distance","2",None,"cycles_to_calories","2",None,"step_goal","2",None,"resting_metabolic_rate","1",None,"activity_type","2",None,"unk_enum","1",None ]
 m_def       = [ "Definition","6","monitoring","timestamp","1",None,"distance","1",None,"cycles","1",None,"activity_type","1",None ]
 hr_def      = [ "Definition","7","monitoring","timestamp","1",None,"heart_rate","1",None ]
 floor_def   = [ "Definition","8","monitoring","timestamp","1",None,"ascent","1",None ]
@@ -164,7 +167,7 @@ dev_info_data = [ "Data","1","device_info","timestamp",garmin_start_ts_not_utc,"
 sw_ver_data   = [ "Data","2","software","version","6.0",None ]
 s_inf_data    = [ "Data","3","soft_info","field0","0",None,"field1","0",None,"field2","200",None ]
 m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
-#m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts,"s","local_timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
+m_inf_tz_data = [ "Data","4","monitoring_info","timestamp",garmin_start_ts,"s","local_timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 
 
 # There should be a steps timestamp every minute. If there's no reading, then the watch was not on the wrist.
@@ -175,17 +178,20 @@ for emp in steps:
     stepval += int(emp['value'])
     dist = next((x for x in distance if x['dateTime'] == emp['dateTime']), None)
     distval += (int(dist['value'])/100.0) # centimeters to meters conversion.
-    out_dict[ts] = { "distance": distval, "steps": stepval }
+    data_ts = ts - local_to_utc_diff if offset_ts_data else ts
+    out_dict[data_ts] = { "distance": distval, "steps": stepval }
 
+# Floor data is in local time. Ugh.
 for emp in floors:
   dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
     ascentval = int(emp['value'])/10.0 * 3.04 # 10 ft is 3.048 meters. Still a little too high. Try 3.04.
+    data_ts = ts if offset_ts_data else ts + local_to_utc_diff # already in local time
     if ts in out_dict:
-      out_dict[ts].update({"floors": ascentval})
+      out_dict[data_ts].update({"floors": ascentval})
     else:
-      out_dict[ts] = {"floors": ascentval}
+      out_dict[data_ts] = {"floors": ascentval}
 
 
 process_hr()
@@ -193,9 +199,9 @@ process_hr()
 # Final output stuff
 for key in sorted(out_dict):
     if "steps" in out_dict[key]:
-      output_data.append(["Data",6,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "distance", "{0:.3f}".format(out_dict[key]['distance']), "m", "steps",int(out_dict[key]['steps']),"cycles","activity_type","6",None])
+      output_data.append(["Data",6,"monitoring","timestamp",key-FIT_EPOCH_OFFSET, "s", "distance", "{0:.3f}".format(out_dict[key]['distance']), "m", "steps",int(out_dict[key]['steps']),"cycles","activity_type","6",None])
     if "heartRate" in out_dict[key]:
-      output_data.append(["Data",7,"monitoring","timestamp",key-local_to_utc_diff-FIT_EPOCH_OFFSET, "s", "heart_rate",out_dict[key]['heartRate'],"bpm"])
+      output_data.append(["Data",7,"monitoring","timestamp",key-FIT_EPOCH_OFFSET, "s", "heart_rate",out_dict[key]['heartRate'],"bpm"])
     if "floors" in out_dict[key]:
       output_data.append(["Data",8,"monitoring","timestamp",key-FIT_EPOCH_OFFSET, "s", "ascent", "{0:.3f}".format(out_dict[key]['floors']),"m"])
 
@@ -230,8 +236,12 @@ wellness_writer.writerow(sw_ver_def)
 wellness_writer.writerow(sw_ver_data)
 wellness_writer.writerow(s_inf_def)
 wellness_writer.writerow(s_inf_data)
-wellness_writer.writerow(m_inf_def)
-wellness_writer.writerow(m_inf_data)
+if offset_ts_data:
+  wellness_writer.writerow(m_inf_def)
+  wellness_writer.writerow(m_inf_data)
+else:
+  wellness_writer.writerow(m_inf_tz_def)
+  wellness_writer.writerow(m_inf_tz_data)
 wellness_writer.writerow(m_def)
 wellness_writer.writerow(hr_def)
 wellness_writer.writerow(floor_def)
@@ -240,11 +250,12 @@ wellness_writer.writerow(rhr_def)
 
 # Sort and write out.
 #output_data.sort(key= operator.itemgetter(4,1))
+rhr_ts = garmin_start_ts + 86000 - local_to_utc_diff if offset_ts_data else garmin_start_ts + 86000
 wellness_writer.writerows(output_data)
 if hrsamples == 6:
-  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"seven_day_rhr", seven_day_avg, None, "daily_rhr", day_rhr, None ] )
+  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", rhr_ts,None,"seven_day_rhr", seven_day_avg, None, "daily_rhr", day_rhr, None ] )
 else:
-  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", garmin_start_ts+86000,None,"daily_rhr", day_rhr, None ] )
+  wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", rhr_ts,None,"daily_rhr", day_rhr, None ] )
 wellness_data_file.close()
 
 # Sleep
