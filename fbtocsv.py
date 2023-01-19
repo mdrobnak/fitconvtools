@@ -28,17 +28,47 @@ else:
 
 file_id_number = args.file_number
 
+# Temporary
+full_date = "2015-06-%s" % df_date
+
 # Open needed files.
-with open("%s/Physical Activity/heart_rate-2015-06-%s.json" % (args.src_dir, df_date)) as json_file:
+filename_date = ""
+check_prev_month = False
+for f_name in os.listdir("%s/Physical Activity" % args.src_dir):
+  # heart rate file is exact date - don't need to search for that.
+  # Check to see if the beginning matches, and that the desired date is >= date in the file.
+  # The rest of the data is aligned on this other date, so find one, find them all.
+  if f_name.startswith('steps-%s' % full_date.rsplit("-",1)[0]):
+    if int(df_date) >= int(f_name.rsplit("-",1)[1].split(".json")[0]):
+      # Yes I could use regex, but I was lazy here for the moment.
+      filename_date=f_name.split("steps-",1)[1].split(".json",1)[0]
+      break
+    else:
+      check_prev_month = True
+
+if check_prev_month:
+  old_month=int((full_date.split("-")[1]))
+  new_month_int=int(old_month)-1
+  if int(old_month) <= 10:
+      new_month = "0%s" % str(new_month_int)
+  else:
+      new_month = "%s" % str(new_month_int)
+  for f_name in os.listdir("%s/Physical Activity" % args.src_dir):
+    tgtstring='steps-%s-%s' % (full_date.split("-",1)[0], new_month)
+    if f_name.startswith('steps-%s-%s' % (full_date.split("-",1)[0], new_month)):
+      filename_date=f_name.split("steps-",1)[1].split(".json",1)[0]
+      break
+
+with open("%s/Physical Activity/heart_rate-%s.json" % (args.src_dir, full_date)) as json_file:
   heart_rate = json.load(json_file)
 
-with open('%s/Physical Activity/steps-2015-06-09.json' % args.src_dir) as json_file:
+with open('%s/Physical Activity/steps-%s.json' % (args.src_dir, filename_date)) as json_file:
   steps = json.load(json_file)
 
-with open('%s/Physical Activity/distance-2015-06-09.json' % args.src_dir) as json_file:
+with open('%s/Physical Activity/distance-%s.json' % (args.src_dir, filename_date)) as json_file:
   distance = json.load(json_file)
 
-with open('%s/Physical Activity/altitude-2015-06-09.json' % args.src_dir) as json_file:
+with open('%s/Physical Activity/altitude-%s.json' % (args.src_dir, filename_date)) as json_file:
   floors = json.load(json_file)
 
 
