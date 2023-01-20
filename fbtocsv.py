@@ -13,26 +13,25 @@ import time
 parser = argparse.ArgumentParser(
                     prog = 'fbtocsv',
                     description = 'Converts Fitbit data for use with CSVTool')
-parser.add_argument('-d', '--date')      # option that takes a value
+parser.add_argument('-d', '--date')
 parser.add_argument('-f', '--file-number', type=int, default=1)
 parser.add_argument('-r', '--rhr-only', action='store_true', default=False)
 parser.add_argument('-s', '--src-dir', default=".")
 parser.add_argument('-t', '--offset-ts-data', action='store_true', default=False)
 
 args = parser.parse_args()
-if args.date is not None:
-  df_date=args.date
-else:
+if args.date is None:
   print("Must specify date.")
   parser.print_usage()
   sys.exit(1)
 
 file_id_number = args.file_number
-
-# Temporary
-full_date = "2015-06-%s" % df_date
-
+full_date      = args.date
 offset_ts_data = args.offset_ts_data
+
+year         = full_date.split("-",3)[0]
+month        = full_date.split("-",3)[1]
+day_of_month = full_date.split("-",3)[2]
 
 # Open needed files.
 filename_date = ""
@@ -42,7 +41,7 @@ for f_name in os.listdir("%s/Physical Activity" % args.src_dir):
   # Check to see if the beginning matches, and that the desired date is >= date in the file.
   # The rest of the data is aligned on this other date, so find one, find them all.
   if f_name.startswith('steps-%s' % full_date.rsplit("-",1)[0]):
-    if int(df_date) >= int(f_name.rsplit("-",1)[1].split(".json")[0]):
+    if int(day_of_month) >= int(f_name.rsplit("-",1)[1].split(".json")[0]):
       # Yes I could use regex, but I was lazy here for the moment.
       filename_date=f_name.split("steps-",1)[1].split(".json",1)[0]
       break
@@ -88,7 +87,7 @@ stepval = 0
 # FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
 FIT_EPOCH_OFFSET = 631065600+31536000
 
-date_time = datetime.datetime(2015,6,int(df_date),4,0,0)
+date_time = datetime.datetime(int(year),int(month),int(day_of_month),4,0,0)
 start_ts = int(time.mktime(date_time.timetuple()))
 garmin_start_ts = start_ts-FIT_EPOCH_OFFSET
 garmin_start_ts_not_utc = garmin_start_ts + int(pytz.timezone("US/Eastern").utcoffset(date_time).total_seconds())
@@ -123,14 +122,14 @@ if args.rhr_only:
         rhr = json.load(rhr_file)
     process_hr()
     daily_rhr = int(min(hrvals))
-    rhr.append({ "dateTime": "2015-06-%s" % df_date, "rhr": daily_rhr })
+    rhr.append({ "dateTime": "%s" % full_date, "rhr": daily_rhr })
     with open("%s/rhr-stats.json" % os.environ.get('HOME'), "w") as jsonFile:
         json.dump(rhr, jsonFile)
     sys.exit(0)
 else:
     with open("%s/rhr-stats.json" % os.environ.get('HOME')) as rhr_file:
         rhr = json.load(rhr_file)
-    today = datetime.datetime.strptime("2015-06-%s" % df_date, "%Y-%m-%d")
+    today = datetime.datetime.strptime("%s" % full_date, "%Y-%m-%d")
     seven_days = today - datetime.timedelta(days=7)
     today_ts = today.timestamp()
     seven_day_ts = seven_days.timestamp()
@@ -212,11 +211,11 @@ seven_day_avg = int(seven_day_avg/7)
 
 ##### BEGIN OUTPUT SECTION
 # create the csv writer object
-wellness_filename = "new-wellness-2015-06-%s.csv" % df_date
+wellness_filename = "new-wellness-%s.csv" % full_date
 wellness_data_file = open(wellness_filename, 'w')
 wellness_writer = csv.writer(wellness_data_file)
 
-sleep_filename = "sleep-2015-06-%s.csv" % df_date
+sleep_filename = "sleep-%s.csv" % full_date
 sleep_data_file = open(sleep_filename, 'w')
 
 # create the csv writer object
