@@ -150,8 +150,6 @@ header = [ "Type","Local Number","Message","Field 1","Value 1","Units 1","Field 
 # Write required data
 file_id_def = [ "Definition","0","file_id","serial_number","1",None,"time_created",1,"","manufacturer","1","","product","1","","number","1","","type","1","" ]
 dev_inf_def = [ "Definition","1","device_info","timestamp","1",None,"serial_number","1",None,"manufacturer","1",None,"product","1",None,"software_version","1", None ]
-sw_ver_def  = [ "Definition","2","software","version","1",None ]
-s_inf_def   = [ "Definition","3","soft_info","field0","1",None,"field1","1",None,"field2","1",None ]
 m_inf_def   = [ "Definition","4","monitoring_info","timestamp","1",None,"cycles_to_distance","2",None,"cycles_to_calories","2",None,"step_goal","2",None,"resting_metabolic_rate","1",None,"activity_type","2",None,"unk_enum","1",None ]
 m_inf_tz_def= [ "Definition","4","monitoring_info","timestamp","1",None,"local_timestamp","1",None,"cycles_to_distance","2",None,"cycles_to_calories","2",None,"step_goal","2",None,"resting_metabolic_rate","1",None,"activity_type","2",None,"unk_enum","1",None ]
 m_def       = [ "Definition","6","monitoring","timestamp","1",None,"distance","1",None,"cycles","1",None,"activity_type","1",None ]
@@ -164,8 +162,6 @@ rhr_def     = [ "Definition","9","resting_heart_rate","timestamp","1",None,"seve
 file_id_type = 32
 file_id_data  = [ "Data","0","file_id","serial_number","3411930528",None,"time_created",garmin_start_ts_not_utc,None,"manufacturer","1",None,"garmin_product","3851",None,"number",file_id_number,None,"type",file_id_type,None ]
 dev_info_data = [ "Data","1","device_info","timestamp",garmin_start_ts_not_utc,"s","serial_number","3411930528",None,"manufacturer","1",None,"garmin_product","3851",None,"software_version","11.16",None ]
-sw_ver_data   = [ "Data","2","software","version","6.0",None ]
-s_inf_data    = [ "Data","3","soft_info","field0","0",None,"field1","0",None,"field2","200",None ]
 m_inf_data    = [ "Data","4","monitoring_info","timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 m_inf_tz_data = [ "Data","4","monitoring_info","timestamp",garmin_start_ts,"s","local_timestamp",garmin_start_ts_not_utc,"s","cycles_to_distance","1.6198|2.4296","m/cycle","cycles_to_calories","0.047|0.1482","kcal/cycle","step_goal","10000|10000",None,"resting_metabolic_rate","1987","kcal / day","activity_type","6|0",None,None,None,None ]
 
@@ -232,10 +228,6 @@ wellness_writer.writerow(file_id_def)
 wellness_writer.writerow(file_id_data)
 wellness_writer.writerow(dev_inf_def)
 wellness_writer.writerow(dev_info_data)
-wellness_writer.writerow(sw_ver_def)
-wellness_writer.writerow(sw_ver_data)
-wellness_writer.writerow(s_inf_def)
-wellness_writer.writerow(s_inf_data)
 if offset_ts_data:
   wellness_writer.writerow(m_inf_def)
   wellness_writer.writerow(m_inf_data)
