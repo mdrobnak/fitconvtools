@@ -18,7 +18,6 @@ year         = full_date.split("-",3)[0]
 month        = full_date.split("-",3)[1]
 day_of_month = full_date.split("-",3)[2]
 
-
 # Load data from files
 filename_date = convutils.find_file(args.src_dir, full_date, day_of_month)
 with open("%s/Physical Activity/heart_rate-%s.json" % (args.src_dir, full_date)) as json_file:
@@ -33,7 +32,6 @@ with open('%s/Physical Activity/distance-%s.json' % (args.src_dir, filename_date
 with open('%s/Physical Activity/altitude-%s.json' % (args.src_dir, filename_date)) as json_file:
   floors = json.load(json_file)
 
-
 # Initalize empty objects and values
 distval = 0.0
 hrsamples = 0
@@ -41,7 +39,6 @@ hrvals = []
 out_dict = {}
 seven_day_avg = 0
 stepval = 0
-
 
 # FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
 FIT_EPOCH_OFFSET = 631065600+31536000
@@ -100,8 +97,7 @@ else:
            seven_day_avg += int(samples['rhr'])
            hrsamples += 1
 
-
-
+# Main processing loop
 # There should be a steps timestamp every minute. If there's no reading, then the watch was not on the wrist.
 for emp in steps:
   dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
@@ -125,10 +121,8 @@ for emp in floors:
     else:
       out_dict[data_ts] = {"floors": ascentval}
 
-
 # HR calc is broken out so that we can do RHR JSON stuff.
 process_hr()
-
 
 # RHR Calc:
 # Resting Heart Rate: This value is for the current day. Daily RHR is calculated using the lowest 30 minute average in a 24 hour period.
