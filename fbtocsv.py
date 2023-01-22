@@ -13,6 +13,7 @@ import time
 args           = convutils.get_arguments()
 full_date      = args.date
 offset_ts_data = args.offset_ts_data
+proc_hr_data   = not args.without_heart_rate
 
 year         = full_date.split("-",3)[0]
 month        = full_date.split("-",3)[1]
@@ -20,8 +21,13 @@ day_of_month = full_date.split("-",3)[2]
 
 # Load data from files
 filename_date = convutils.find_file(args.src_dir, full_date, day_of_month)
-with open("%s/Physical Activity/heart_rate-%s.json" % (args.src_dir, full_date)) as json_file:
-  heart_rate = json.load(json_file)
+if proc_hr_data:
+  try:
+    with open("%s/Physical Activity/heart_rate-%s.json" % (args.src_dir, full_date)) as json_file:
+      heart_rate = json.load(json_file)
+  except OSError:
+    print("Unable to load heart rate JSON file. Disabling heart rate processing.")
+    proc_hr_data = False
 
 with open('%s/Physical Activity/steps-%s.json' % (args.src_dir, filename_date)) as json_file:
   steps = json.load(json_file)
@@ -122,18 +128,39 @@ for emp in floors:
       out_dict[data_ts] = {"floors": ascentval}
 
 # HR calc is broken out so that we can do RHR JSON stuff.
-process_hr()
+if proc_hr_data:
+  process_hr()
+  # Check each minute for data - Fill in 0s for missing heart rate
+  loop_start_ts = start_ts - local_to_utc_diff if offset_ts_data else start_ts
+  ts_pos        = loop_start_ts
+  found         = True
+  while ts_pos < loop_start_ts+86400:
+    if ts_pos not in out_dict:
+      #print("Potential data missing at ts_pos: ", ts_pos)
+      found=False
+      for key in out_dict:
+        if key >= ts_pos-60 and key <= ts_pos+60:
+          #print("Data found at: ", key)
+          found=True
+          break
+      if found==False:
+        out_dict[ts_pos] = { "heartRate": 0 }
+    ts_pos += 60
+    found = True
 
-# RHR Calc:
-# Resting Heart Rate: This value is for the current day. Daily RHR is calculated using the lowest 30 minute average in a 24 hour period.
-# 7-Day Average Resting Heart Rate: Some watches will display a 7-day average resting value which is the daily average resting heart rate over the last seven days. It is a rolling value.
-day_rhr = int(min(hrvals))
-print("Today's RHR: ", day_rhr)
-seven_day_avg += day_rhr
-seven_day_avg = int(seven_day_avg/7)
+  # RHR Calc:
+  # Resting Heart Rate: This value is for the current day. Daily RHR is calculated using the lowest 30 minute average in a 24 hour period.
+  # 7-Day Average Resting Heart Rate: Some watches will display a 7-day average resting value which is the daily average resting heart rate over the last seven days. It is a rolling value.
+  day_rhr = int(min(hrvals))
+  print("Today's RHR: ", day_rhr)
+  seven_day_avg += day_rhr
+  seven_day_avg = int(seven_day_avg/7)
+else:
+  day_rhr = 0
+  seven_day_avg = 0
 
 # Wellness
-convutils.write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_start_ts_not_utc, hrsamples, day_rhr, seven_day_avg, args.file_number)
+convutils.write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_start_ts_not_utc, proc_hr_data, hrsamples, day_rhr, seven_day_avg, args.file_number)
 
 # Sleep
 convutils.write_sleep(full_date, garmin_start_ts, garmin_start_ts_not_utc, local_to_utc_diff)

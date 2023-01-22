@@ -15,6 +15,7 @@ def get_arguments():
   parser.add_argument('-r', '--rhr-only', action='store_true', default=False)
   parser.add_argument('-s', '--src-dir', default=".")
   parser.add_argument('-t', '--offset-ts-data', action='store_true', default=False)
+  parser.add_argument('-w', '--without-heart-rate', action='store_true', default=False)
 
   args = parser.parse_args()
   if args.date is None:
@@ -108,7 +109,7 @@ def write_sleep(full_date, garmin_start_ts, garmin_start_ts_not_utc, local_to_ut
   sleep_writer.writerow(sleep_event_stp)
   sleep_data_file.close()
 
-def write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_start_ts_not_utc, hrsamples, day_rhr, seven_day_avg, file_id_number):
+def write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_start_ts_not_utc, proc_hr_data, hrsamples, day_rhr, seven_day_avg, file_id_number):
   #FIXME: Some items unconditionally use local time... Fix that.
   output_data = []
   local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
@@ -145,9 +146,11 @@ def write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_
     wellness_writer.writerow(m_inf_tz_def)
     wellness_writer.writerow(m_inf_tz_data)
   wellness_writer.writerow(m_def)
-  wellness_writer.writerow(hr_def)
+  if proc_hr_data:
+    wellness_writer.writerow(hr_def)
   wellness_writer.writerow(floor_def)
-  wellness_writer.writerow(rhr_def)
+  if proc_hr_data:
+    wellness_writer.writerow(rhr_def)
 
   # Iterate through data building rows.
   for key in sorted(out_dict):
@@ -161,9 +164,9 @@ def write_wellness(out_dict, full_date, offset_ts_data, garmin_start_ts, garmin_
 
   # Last item should be Resting Heart Rate data.
   rhr_ts = garmin_start_ts + 86000 - local_to_utc_diff if offset_ts_data else garmin_start_ts + 86000
-  if hrsamples == 6:
+  if hrsamples == 6 and proc_hr_data:
     wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", rhr_ts,None,"seven_day_rhr", seven_day_avg, None, "daily_rhr", day_rhr, None ] )
-  else:
+  elif proc_hr_data:
     wellness_writer.writerow( [ "Data", "9","resting_heart_rate", "timestamp", rhr_ts,None,"daily_rhr", day_rhr, None ] )
 
   # Close file.
