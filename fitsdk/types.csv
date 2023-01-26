@@ -1,0 +1,14 @@
+Type Name,Base Type,Value Name,Value,Comment
+mesg_num,uint16,,,
+,,soft_info,355,"Message number garmin custom 1"
+,,sleep_sensor,273,"Sleep sensor SW Version"
+,,resting_heart_rate,211,"Sleep sensor SW Version"
+,,,,,,,,
+cust_unk_enum,enum,,,"Unknown Enums"
+,,option_a,0,"Option A"
+,,option_b,1,"Option B"
+,,option_c,2,"Option C"
+cust_sensor_enum,enum,,,"Sensor Enum"
+,,option_a,0,"Option A"
+,,option_b,1,"Option B"
+,,option_c,2,"Option C"
