@@ -46,12 +46,9 @@ out_dict = {}
 seven_day_avg = 0
 stepval = 0
 
-# FIT Offset from UnixTime AND ADDITIONAL 365 DAYS OFFSET!
-FIT_EPOCH_OFFSET = 631065600+31536000
-
 date_time = datetime.datetime(int(year),int(month),int(day_of_month),4,0,0)
 start_ts = int(time.mktime(date_time.timetuple()))
-garmin_start_ts = start_ts-FIT_EPOCH_OFFSET
+garmin_start_ts = start_ts-convutils.FIT_EPOCH_OFFSET
 garmin_start_ts_not_utc = garmin_start_ts + int(pytz.timezone("US/Eastern").utcoffset(date_time).total_seconds())
 local_to_utc_diff = garmin_start_ts - garmin_start_ts_not_utc
 fb_json_date_format = "%m/%d/%y %H:%M:%S"
@@ -116,13 +113,16 @@ for emp in steps:
     out_dict[data_ts] = { "distance": distval, "steps": stepval }
 
 # Floor data is in local time. Ugh.
+# The correct multiplier to use is 3.048. This tends to read too high compared to fitbit.
+# 3.03 is too low. 3.04 was too low. Trying 3.044.
+floor_to_meters = 3.044
 for emp in floors:
   dt_object = datetime.datetime.strptime(emp['dateTime'], fb_json_date_format)
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
-    ascentval = int(emp['value'])/10.0 * 3.04 # 10 ft is 3.048 meters. Still a little too high. Try 3.04.
+    ascentval = int(emp['value'])/10.0 * floor_to_meters
     data_ts = ts if offset_ts_data else ts + local_to_utc_diff # already in local time
-    if ts in out_dict:
+    if data_ts in out_dict:
       out_dict[data_ts].update({"floors": ascentval})
     else:
       out_dict[data_ts] = {"floors": ascentval}
