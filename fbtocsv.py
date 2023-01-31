@@ -9,6 +9,15 @@ import pytz
 import sys
 import time
 
+# Initalize empty objects and values
+distance = {}
+distval = 0.0
+hrsamples = 0
+hrvals = []
+out_dict = {}
+seven_day_avg = 0
+stepval = 0
+
 # Process arguments
 args           = convutils.get_arguments()
 full_date      = args.date
@@ -37,15 +46,6 @@ with open('%s/Physical Activity/distance-%s.json' % (args.src_dir, filename_date
 
 with open('%s/Physical Activity/altitude-%s.json' % (args.src_dir, filename_date)) as json_file:
   floors = json.load(json_file)
-
-# Initalize empty objects and values
-distance = {}
-distval = 0.0
-hrsamples = 0
-hrvals = []
-out_dict = {}
-seven_day_avg = 0
-stepval = 0
 
 # Convert from list to dictionary so that we can lookup via key. This increased performance 2x.
 for value in dist_list:
