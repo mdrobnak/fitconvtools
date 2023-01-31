@@ -33,18 +33,23 @@ with open('%s/Physical Activity/steps-%s.json' % (args.src_dir, filename_date)) 
   steps = json.load(json_file)
 
 with open('%s/Physical Activity/distance-%s.json' % (args.src_dir, filename_date)) as json_file:
-  distance = json.load(json_file)
+  dist_list = json.load(json_file)
 
 with open('%s/Physical Activity/altitude-%s.json' % (args.src_dir, filename_date)) as json_file:
   floors = json.load(json_file)
 
 # Initalize empty objects and values
+distance = {}
 distval = 0.0
 hrsamples = 0
 hrvals = []
 out_dict = {}
 seven_day_avg = 0
 stepval = 0
+
+# Convert from list to dictionary so that we can lookup via key. This increased performance 2x.
+for value in dist_list:
+  distance[value['dateTime']] = { "distance": value['value'] }
 
 date_time = datetime.datetime(int(year),int(month),int(day_of_month),4,0,0)
 start_ts = int(time.mktime(date_time.timetuple()))
@@ -107,8 +112,7 @@ for emp in steps:
   ts = int(dt_object.timestamp())
   if ts >= start_ts and ts < start_ts+86400:
     stepval += int(emp['value'])
-    dist = next((x for x in distance if x['dateTime'] == emp['dateTime']), None)
-    distval += (int(dist['value'])/100.0) # centimeters to meters conversion.
+    distval += (int(distance[emp['dateTime']]['distance'])/100.0) # centimeters to meters conversion.
     data_ts = ts - local_to_utc_diff if offset_ts_data else ts
     out_dict[data_ts] = { "distance": distval, "steps": stepval }
 
